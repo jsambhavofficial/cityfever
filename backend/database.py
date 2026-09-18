@@ -1,25 +1,27 @@
-"""
-Database setup for CivicFlow backend.
-SQLite for the hackathon, but only through SQLAlchemy Core/ORM so swapping
-to Postgres/Mongo later just means changing DATABASE_URL (Mongo would need
-a different models.py, but the rest of the app doesn't care).
-"""
+"""Database connection and session configuration for CivicFlow."""
+import os
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_URL = "sqlite:///./civicflow.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "civicflow.db")
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
 
-# check_same_thread=False is needed only because SQLite + FastAPI's default
-# threaded dev server touch the connection from different threads.
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
 Base = declarative_base()
 
+def init_db():
+    """Create all tables if they do not exist."""
+    from backend.models import Complaint  # noqa: F401
+    Base.metadata.create_all(bind=engine)
 
 def get_db():
-    """FastAPI dependency: yields a session, always closes it after the request."""
+    """Dependency for obtaining database session per request."""
     db = SessionLocal()
     try:
         yield db

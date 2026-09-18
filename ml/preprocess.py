@@ -1,34 +1,45 @@
-"""
-CivicFlow — Text Preprocessing Module
-=====================================
-Member 1 | Prepares complaint text for both training and inference.
-Guarantees consistent text cleaning between training and inference phases.
-"""
-
 import re
+import string
 
+CONTRACTIONS = {
+    "can't": "cannot",
+    "won't": "will not",
+    "n't": " not",
+    "'re": " are",
+    "'s": " is",
+    "'d": " would",
+    "'ll": " will",
+    "'t": " not",
+    "'ve": " have",
+    "'m": " am",
+}
+
+def expand_contractions(text: str) -> str:
+    for pattern, replacement in CONTRACTIONS.items():
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    return text
 
 def clean_text(text: str) -> str:
     """
-    Clean and normalize complaint text:
-    - Lowercase
-    - Replace URLs and email addresses
-    - Normalize whitespace and special characters
-    - Preserve alphanumeric terms, locations, and units
+    Standard text cleaner used consistently across training and inference.
+    1. Lowers case
+    2. Expands common contractions
+    3. Removes excess punctuation while keeping alphanumeric and spaces
+    4. Normalizes whitespace
     """
     if not text or not isinstance(text, str):
         return ""
-
-    text = text.lower()
-    # Strip URLs
-    text = re.sub(r"https?://\S+|www\.\S+", "", text)
-    # Strip emails
-    text = re.sub(r"\S+@\S+", "", text)
-    # Replace non-alphanumeric punctuation with spaces (keep hyphens in compound words)
-    text = re.sub(r"[^\w\s\-]", " ", text)
-    # Strip standalone numbers and excessive hyphens
-    text = re.sub(r"-+", "-", text)
-    # Normalize multiple whitespace
-    text = re.sub(r"\s+", " ", text).strip()
-
-    return text
+    
+    # Lowercase
+    cleaned = text.lower().strip()
+    
+    # Expand contractions
+    cleaned = expand_contractions(cleaned)
+    
+    # Replace non-alphanumeric chars (excluding standard spaces and hyphens)
+    cleaned = re.sub(r'[^a-zA-Z0-9\s\-]', ' ', cleaned)
+    
+    # Remove multiple spaces/newlines
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    
+    return cleaned

@@ -1,104 +1,83 @@
-"""
-CivicFlow — Model Training Pipeline
-===================================
-Member 1 | Trains department and issue_type NLP classifiers using TF-IDF + Logistic Regression.
-Evaluates on test split, generates ml/metrics.json, and serializes joblib artifacts.
-"""
-
 import os
-import csv
 import json
 import joblib
+import pandas as pd
+import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-
+from sklearn.metrics import accuracy_score, f1_score
 from ml.preprocess import clean_text
-from ml.evaluate import evaluate_model
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BASE_DIR)
+MODELS_DIR = os.path.join(BASE_DIR, "models")
+VECTORIZERS_DIR = os.path.join(BASE_DIR, "vectorizers")
+METRICS_PATH = os.path.join(BASE_DIR, "metrics.json")
+TRAIN_CSV = os.path.join(ROOT_DIR, "data", "generated", "civicflow_train.csv")
+TEST_CSV = os.path.join(ROOT_DIR, "data", "generated", "civicflow_test.csv")
 
-def load_csv(path: str) -> tuple[list[str], list[str], list[str]]:
-    texts = []
-    departments = []
-    issues = []
-    with open(path, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            texts.append(clean_text(row["complaint_text"]))
-            departments.append(row["department"])
-            issues.append(row["issue_type"])
-    return texts, departments, issues
+def train_and_evaluate():
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    os.makedirs(VECTORIZERS_DIR, exist_ok=True)
 
+    if not (os.path.exists(TRAIN_CSV) and os.path.exists(TEST_CSV)):
+        from data.generated.generate_dataset import generate_dataset
+        generate_dataset()
 
-def main():
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    train_path = os.path.join(base_dir, "data", "generated", "civicflow_train.csv")
-    test_path = os.path.join(base_dir, "data", "generated", "civicflow_test.csv")
+    train_df = pd.read_csv(TRAIN_CSV)
+    test_df = pd.read_csv(TEST_CSV)
 
-    if not os.path.exists(train_path) or not os.path.exists(test_path):
-        raise FileNotFoundError(f"Training/testing data not found at {train_path}. Run generate_dataset.py first.")
+    train_texts = [clean_text(t) for t in train_df["complaint_text"]]
+    test_texts = [clean_text(t) for t in test_df["complaint_text"]]
 
-    train_texts, train_deps, train_issues = load_csv(train_path)
-    test_texts, test_deps, test_issues = load_csv(test_path)
+    # 1. Department Model
+    dept_vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1, sublinear_tf=True)
+    X_train_dept = dept_vectorizer.fit_transform(train_texts)
+    X_test_dept = dept_vectorizer.transform(test_texts)
 
-    # 1. Department Classifier
-    print("Training Department Classifier...")
-    dep_vectorizer = TfidfVectorizer(
-        ngram_range=(1, 2),
-        min_df=2,
-        sublinear_tf=True
-    )
-    X_train_dep = dep_vectorizer.fit_transform(train_texts)
-    X_test_dep = dep_vectorizer.transform(test_texts)
+    dept_model = LogisticRegression(C=2.0, max_iter=500)
+    dept_model.fit(X_train_dept, train_df["department"])
 
-    dep_model = LogisticRegression(max_iter=1000, C=2.0)
-    dep_model.fit(X_train_dep, train_deps)
+    dept_preds = dept_model.predict(X_test_dept)
+    dept_acc = float(accuracy_score(test_df["department"], dept_preds))
+    dept_f1 = float(f1_score(test_df["department"], dept_preds, average="weighted", zero_division=0))
 
-    dep_pred = dep_model.predict(X_test_dep)
-    dep_metrics = evaluate_model(test_deps, dep_pred)
-    print(f"Department Test Accuracy: {dep_metrics['accuracy']:.4f}, Macro F1: {dep_metrics['macro_f1']:.4f}")
-
-    # 2. Issue Type Classifier
-    print("Training Issue Type Classifier...")
-    issue_vectorizer = TfidfVectorizer(
-        ngram_range=(1, 2),
-        min_df=2,
-        sublinear_tf=True
-    )
+    # 2. Issue Type Model
+    issue_vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1, sublinear_tf=True)
     X_train_issue = issue_vectorizer.fit_transform(train_texts)
     X_test_issue = issue_vectorizer.transform(test_texts)
 
-    issue_model = LogisticRegression(max_iter=1000, C=2.0)
-    issue_model.fit(X_train_issue, train_issues)
+    issue_model = LogisticRegression(C=2.0, max_iter=500)
+    issue_model.fit(X_train_issue, train_df["issue_type"])
 
-    issue_pred = issue_model.predict(X_test_issue)
-    issue_metrics = evaluate_model(test_issues, issue_pred)
-    print(f"Issue Type Test Accuracy: {issue_metrics['accuracy']:.4f}, Macro F1: {issue_metrics['macro_f1']:.4f}")
+    issue_preds = issue_model.predict(X_test_issue)
+    issue_acc = float(accuracy_score(test_df["issue_type"], issue_preds))
+    issue_f1 = float(f1_score(test_df["issue_type"], issue_preds, average="weighted", zero_division=0))
 
-    # 3. Save Artifacts
-    models_dir = os.path.join(base_dir, "ml", "models")
-    vect_dir = os.path.join(base_dir, "ml", "vectorizers")
-    os.makedirs(models_dir, exist_ok=True)
-    os.makedirs(vect_dir, exist_ok=True)
+    # Save to disk
+    joblib.dump(dept_model, os.path.join(MODELS_DIR, "department_model.joblib"))
+    joblib.dump(issue_model, os.path.join(MODELS_DIR, "issue_model.joblib"))
+    joblib.dump(dept_vectorizer, os.path.join(VECTORIZERS_DIR, "department_vectorizer.joblib"))
+    joblib.dump(issue_vectorizer, os.path.join(VECTORIZERS_DIR, "issue_vectorizer.joblib"))
 
-    joblib.dump(dep_model, os.path.join(models_dir, "department_model.joblib"))
-    joblib.dump(dep_vectorizer, os.path.join(vect_dir, "department_vectorizer.joblib"))
-    joblib.dump(issue_model, os.path.join(models_dir, "issue_model.joblib"))
-    joblib.dump(issue_vectorizer, os.path.join(vect_dir, "issue_vectorizer.joblib"))
-
-    # 4. Save Metrics
-    metrics_path = os.path.join(base_dir, "ml", "metrics.json")
-    final_metrics = {
-        "model_architecture": "TF-IDF (1,2) + LogisticRegression",
-        "train_samples": len(train_texts),
-        "test_samples": len(test_texts),
-        "department_metrics": dep_metrics,
-        "issue_metrics": issue_metrics
+    metrics = {
+        "model_architecture": "TF-IDF (1,2 n-grams) + LogisticRegression",
+        "training_samples": len(train_df),
+        "test_samples": len(test_df),
+        "department_accuracy": round(dept_acc, 4),
+        "department_f1_weighted": round(dept_f1, 4),
+        "issue_type_accuracy": round(issue_acc, 4),
+        "issue_type_f1_weighted": round(issue_f1, 4),
+        "confidence_mechanism": "Softmax probability distribution via predict_proba",
+        "canonical_departments": sorted(list(train_df["department"].unique()))
     }
-    with open(metrics_path, "w", encoding="utf-8") as f:
-        json.dump(final_metrics, f, indent=2)
 
-    print(f"Saved models to {models_dir} and metrics to {metrics_path}")
+    with open(METRICS_PATH, "w") as f:
+        json.dump(metrics, f, indent=2)
 
+    print("ML Training completed successfully.")
+    print(f"Department Accuracy: {dept_acc:.2%}, Issue Accuracy: {issue_acc:.2%}")
+    return metrics
 
 if __name__ == "__main__":
-    main()
+    train_and_evaluate()

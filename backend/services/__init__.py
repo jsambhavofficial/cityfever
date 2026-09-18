@@ -1,30 +1,12 @@
-"""
-CivicFlow — Backend Services
-=============================
-Operational & ML Intelligence Layer:
-- ML / Rule-based Classifier (predict_complaint)
-- Explainable Priority Scoring (calculate_priority)
-- Entity Extraction (extract_entities)
-- Similar/Duplicate Detection (find_similar_complaints)
-"""
-
-from .classifier import predict_complaint
-from .priority import calculate_priority, CONFIG as PRIORITY_CONFIG
-from .entities import extract_entities, extract_duration, extract_locality
-from .duplicates import find_similar_complaints, haversine_distance_meters, DUPLICATE_CONFIG
-from .clusters import cluster_spatial_incidents, detect_hotspots
+"""Services package for CivicFlow intelligence modules."""
+from .classifier import classify_complaint
+from .entities import extract_entities
+from .priority import calculate_priority
+from .duplicates import find_similar_complaints
 
 __all__ = [
-    "predict_complaint",
-    "calculate_priority",
+    "classify_complaint",
     "extract_entities",
-    "extract_duration",
-    "extract_locality",
+    "calculate_priority",
     "find_similar_complaints",
-    "haversine_distance_meters",
-    "cluster_spatial_incidents",
-    "detect_hotspots",
-    "PRIORITY_CONFIG",
-    "DUPLICATE_CONFIG",
 ]
-
