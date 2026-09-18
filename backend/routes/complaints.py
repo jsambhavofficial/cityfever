@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 """Complaint Routes for CivicFlow (Member 2 ownership)."""
 import random
 import datetime
@@ -21,6 +22,18 @@ from backend.services.entities import extract_entities
 from backend.services.priority import calculate_priority
 from backend.services.duplicates import find_similar_complaints
 from backend.services.gemini_vision import analyze_civic_image
+=======
+from fastapi import APIRouter, Depends, HTTPException, Response
+from sqlalchemy.orm import Session
+
+from database import get_db
+from models import Complaint
+from schemas import (
+    ComplaintCreate, ComplaintOut, ComplaintListOut, ComplaintUpdate,
+    ReassignRequest, SimilarOut,
+)
+from services import classifier, entities, priority, duplicates
+>>>>>>> 0e81bec07a07e2b04ceaa29f2c8efbc173f2a19d
 
 router = APIRouter(prefix="/api/complaints", tags=["Complaints"])
 
@@ -33,8 +46,14 @@ def generate_complaint_id(db: Session) -> str:
         next_id += 1
     return f"C{next_id}"
 
+<<<<<<< HEAD
 @router.post("/analyze-image", response_model=ImageAnalysisResponse)
 def analyze_incident_image(payload: ImageAnalysisRequest):
+=======
+
+@router.post("", response_model=ComplaintOut, status_code=201)
+def create_complaint(payload: ComplaintCreate, db: Session = Depends(get_db)):
+>>>>>>> 0e81bec07a07e2b04ceaa29f2c8efbc173f2a19d
     """
     Multimodal Vision Ingestion Endpoint:
     Inspects photo via Gemini 3.6 Flash, extracts problem title, description,
@@ -109,6 +128,18 @@ def submit_complaint(payload: ComplaintCreate, db: Session = Depends(get_db)):
 
     dup_result = find_similar_complaints(
         complaint_text=text,
+<<<<<<< HEAD
+=======
+        department=prediction["department"],
+        issue_type=prediction["issue_type"],
+        department_confidence=prediction["department_confidence"],
+        issue_confidence=prediction["issue_confidence"],
+        priority_score=priority_result["priority_score"],
+        priority_level=priority_result["priority_level"],
+        priority_reasons=priority_result["priority_reasons"],
+        locality=extracted["locality"],
+        duration_text=extracted["duration_text"],
+>>>>>>> 0e81bec07a07e2b04ceaa29f2c8efbc173f2a19d
         latitude=payload.latitude,
         longitude=payload.longitude,
         existing_complaints=existing_list
@@ -163,6 +194,7 @@ def submit_complaint(payload: ComplaintCreate, db: Session = Depends(get_db)):
 
     return new_complaint
 
+<<<<<<< HEAD
 @router.get("", response_model=List[ComplaintResponse])
 def get_complaints(
     department: Optional[str] = Query(None, description="Filter by department"),
@@ -173,6 +205,16 @@ def get_complaints(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db)
+=======
+@router.get("", response_model=ComplaintListOut)
+def list_complaints(
+    department: str | None = None,
+    status: str | None = None,
+    priority_level: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+>>>>>>> 0e81bec07a07e2b04ceaa29f2c8efbc173f2a19d
 ):
     """Retrieve filtered complaints list ordered by priority score and creation date."""
     query = db.query(Complaint)
@@ -183,6 +225,7 @@ def get_complaints(
         query = query.filter(Complaint.priority_level == priority_level)
     if status and status.lower() != "all":
         query = query.filter(Complaint.status == status)
+<<<<<<< HEAD
     if duplicate_cluster_id:
         query = query.filter(Complaint.duplicate_cluster_id == duplicate_cluster_id)
     if search:
@@ -192,6 +235,19 @@ def get_complaints(
             (Complaint.locality.ilike(search_fmt)) |
             (Complaint.id.ilike(search_fmt))
         )
+=======
+    if priority_level:
+        query = query.filter(Complaint.priority_level == priority_level)
+
+    total = query.count()
+    items = (
+        query.order_by(Complaint.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return ComplaintListOut(total=total, items=items)
+>>>>>>> 0e81bec07a07e2b04ceaa29f2c8efbc173f2a19d
 
     # Order by priority score descending, then created_at descending
     results = query.order_by(Complaint.priority_score.desc(), Complaint.created_at.desc()).offset(offset).limit(limit).all()
@@ -247,13 +303,20 @@ def reassign_complaint(complaint_id: str, payload: ComplaintReassign, db: Sessio
     db.refresh(complaint)
     return complaint
 
+<<<<<<< HEAD
 @router.get("/{complaint_id}/similar", response_model=DuplicateClusterDetail)
 def get_similar_complaints(complaint_id: str, db: Session = Depends(get_db)):
     """Get all complaints that belong to the same duplicate cluster or have similarity matches."""
+=======
+
+@router.get("/{complaint_id}/similar", response_model=SimilarOut)
+def similar_complaints(complaint_id: str, db: Session = Depends(get_db)):
+>>>>>>> 0e81bec07a07e2b04ceaa29f2c8efbc173f2a19d
     complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
     if not complaint:
         raise HTTPException(status_code=404, detail=f"Complaint '{complaint_id}' not found.")
 
+<<<<<<< HEAD
     cluster_id = complaint.duplicate_cluster_id or f"SINGLE-{complaint_id}"
     
     if complaint.duplicate_cluster_id:
@@ -274,3 +337,21 @@ def get_similar_complaints(complaint_id: str, db: Session = Depends(get_db)):
         "locality": complaint.locality,
         "complaints": cluster_members
     }
+=======
+    if not complaint.duplicate_cluster_id:
+        return SimilarOut(target_id=complaint.id, cluster_id=None, matched_complaints=[])
+
+    matched = (
+        db.query(Complaint)
+        .filter(
+            Complaint.duplicate_cluster_id == complaint.duplicate_cluster_id,
+            Complaint.id != complaint.id,
+        )
+        .all()
+    )
+    return SimilarOut(
+        target_id=complaint.id,
+        cluster_id=complaint.duplicate_cluster_id,
+        matched_complaints=matched,
+    )
+>>>>>>> 0e81bec07a07e2b04ceaa29f2c8efbc173f2a19d
