@@ -4,7 +4,6 @@ Calculates transparent 100-point operational priority score with human-readable 
 from typing import Dict, List, Optional
 import re
 
-<<<<<<< HEAD
 SEVERITY_KEYWORDS = {
     # High severity (30-40 pts)
     "open manhole": 40, "sparking": 38, "live wire": 40, "burst pipeline": 36,
@@ -39,21 +38,12 @@ def calculate_priority(
             "Reported duration exceeds 48 hours",
             "Public location detected"
         ]
-=======
-CONTRACT (do not change):
-    score(department: str, issue_type: str, duration_text: str | None,
-          text: str) -> {
-        "priority_score": int,          # 0-100
-        "priority_level": str,          # "Low" | "Medium" | "High"
-        "priority_reasons": list[str],  # human-readable justifications
->>>>>>> 0e81bec07a07e2b04ceaa29f2c8efbc173f2a19d
     }
     """
     text_lower = (text or "").lower()
     issue_lower = (issue_type or "").lower()
     reasons: List[str] = []
 
-<<<<<<< HEAD
     # 1. Severity Score (0 - 40)
     severity_score = 15  # baseline
     matched_severity = False
@@ -80,71 +70,12 @@ CONTRACT (do not change):
         elif any(w in d_lower for w in ["1 day", "24 hours", "yesterday", "since morning"]):
             duration_score = 10
             reasons.append(f"Active unresolved issue reported: '{duration_text}'")
-=======
-Placeholder implementation: a transparent, rule-based 100-point score
-matching the breakdown in Member 4's instructions
-(Severity 0-40, Duration 0-20, Public impact 0-20, Safety risk 0-20), with a
-plain-English reason recorded for each sub-score that contributed. Replace
-the body with Member 4's real logic — keep the same signature and keep
-priority_level derived with the same thresholds (0-30 Low, 31-60 Medium,
-61-100 High) per docs/API_CONTRACT.md.
-"""
-
-_HIGH_SEVERITY_DEPARTMENTS = {"Public Safety", "Electrical", "Drainage"}
-_SAFETY_KEYWORDS = ["accident", "unsafe", "exposed wire", "collapse", "fire"]
-_PUBLIC_IMPACT_DEPARTMENTS = {"Water", "Sanitation", "Drainage", "Roads"}
-
-
-def score(department: str, issue_type: str, duration_text: str | None, text: str) -> dict:
-    lowered = text.lower()
-    reasons = []
-
-    if department in _HIGH_SEVERITY_DEPARTMENTS:
-        severity = 30
-        reasons.append(f"High-severity department: {department}")
-    else:
-        severity = 18
-        reasons.append(f"Standard-severity issue type: {issue_type}")
-
-    duration_score = 0
-    if duration_text:
-        lowered_duration = duration_text.lower()
-        if "month" in lowered_duration:
-            duration_score = 20
-        elif "week" in lowered_duration:
-            duration_score = 14
-        elif "day" in lowered_duration:
-            duration_score = 8
-        if duration_score:
-            reasons.append(f"Reported duration: {duration_text}")
-
-    if department in _PUBLIC_IMPACT_DEPARTMENTS:
-        public_impact = 15
-        reasons.append(f"Public-facing infrastructure department: {department}")
-    else:
-        public_impact = 8
-
-    safety_hit = next((kw for kw in _SAFETY_KEYWORDS if kw in lowered), None)
-    if safety_hit:
-        safety_risk = 20
-        reasons.append(f"Safety risk keyword detected: '{safety_hit}'")
-    else:
-        safety_risk = 5
-
-    total = min(severity + duration_score + public_impact + safety_risk, 100)
-
-    if total <= 30:
-        level = "Low"
-    elif total <= 60:
-        level = "Medium"
->>>>>>> 0e81bec07a07e2b04ceaa29f2c8efbc173f2a19d
     else:
         # Check text for duration clues if duration_text wasn't explicitly isolated
         if re.search(r'\b(?:3|4|5|6|7|\d{2,})\s*days?\b', text_lower):
             duration_score = 15
             reasons.append("Multi-day persistent incident detected in report text")
 
-<<<<<<< HEAD
     # 3. Public Impact Score (0 - 20)
     impact_score = 5
     matched_impacts = [kw for kw in PUBLIC_IMPACT_KEYWORDS if kw in text_lower]
@@ -185,10 +116,4 @@ def score(department: str, issue_type: str, duration_text: str | None, text: str
         "priority_score": int(total_score),
         "priority_level": priority_level,
         "priority_reasons": reasons
-=======
-    return {
-        "priority_score": total,
-        "priority_level": level,
-        "priority_reasons": reasons,
->>>>>>> 0e81bec07a07e2b04ceaa29f2c8efbc173f2a19d
     }

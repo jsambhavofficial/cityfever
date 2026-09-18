@@ -23,7 +23,6 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     all_complaints = db.query(Complaint).all()
     total = len(all_complaints)
 
-<<<<<<< HEAD
     high_prio = sum(1 for c in all_complaints if c.priority_level == "High")
     med_prio = sum(1 for c in all_complaints if c.priority_level == "Medium")
     low_prio = sum(1 for c in all_complaints if c.priority_level == "Low")
@@ -65,17 +64,3 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         "priority_breakdown": prio_counts,
         "top_localities": top_localities
     }
-=======
-    status_counts = Counter(c.status for c in complaints if c.status)
-    priority_distribution = Counter(c.priority_level for c in complaints if c.priority_level)
-    department_breakdown = Counter(c.department for c in complaints if c.department)
-    duplicate_clusters = {c.duplicate_cluster_id for c in complaints if c.duplicate_cluster_id}
-
-    return DashboardStats(
-        total_complaints=len(complaints),
-        status_counts=dict(status_counts),
-        priority_distribution=dict(priority_distribution),
-        department_breakdown=dict(department_breakdown),
-        duplicate_clusters_count=len(duplicate_clusters),
-    )
->>>>>>> 0e81bec07a07e2b04ceaa29f2c8efbc173f2a19d
