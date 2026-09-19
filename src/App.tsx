@@ -6,6 +6,7 @@ import { Dashboard } from './pages/Dashboard';
 import { FieldWorkerOps } from './pages/FieldWorkerOps';
 import { NotificationDrawer } from './components/NotificationDrawer';
 import { SettingsModal } from './components/SettingsModal';
+import { AuthModal } from './components/AuthModal';
 import { CheckCircle2 } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
@@ -26,6 +27,7 @@ const MainAppContent: React.FC = () => {
       {/* Supporting Drawers & Modals */}
       <NotificationDrawer />
       <SettingsModal />
+      <AuthModal />
 
       {/* Global Toast Alert */}
       {toastMessage && (

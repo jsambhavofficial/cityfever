@@ -164,3 +164,44 @@ input[type='range']::-webkit-slider-thumb {
 .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
   filter: invert(1) opacity(0.7);
 }
+
+/* ─── Emergency Beacon & Radar Shockwave Animations ("Algspot") ─── */
+@keyframes emergencyRadarPing {
+  0% {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0.95;
+  }
+  65% {
+    transform: translate(-50%, -50%) scale(2.3);
+    opacity: 0.35;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(3.1);
+    opacity: 0;
+  }
+}
+
+@keyframes emergencyStrobe {
+  0%, 100% {
+    box-shadow: 0 0 14px #FF1E1E, 0 0 32px rgba(255, 30, 30, 0.85);
+    background-color: #EF4444;
+    border-color: #FEF08A;
+  }
+  50% {
+    box-shadow: 0 0 28px #FF4D4D, 0 0 60px rgba(255, 0, 0, 1);
+    background-color: #DC2626;
+    border-color: #FFFFFF;
+  }
+}
+
+.emergency-radar-ring-1 {
+  animation: emergencyRadarPing 1.8s cubic-bezier(0.15, 0.85, 0.25, 1) infinite !important;
+}
+
+.emergency-radar-ring-2 {
+  animation: emergencyRadarPing 1.8s cubic-bezier(0.15, 0.85, 0.25, 1) 0.6s infinite !important;
+}
+
+.emergency-beacon-strobe {
+  animation: emergencyStrobe 0.85s ease-in-out infinite !important;
+}

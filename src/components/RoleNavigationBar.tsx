@@ -22,6 +22,9 @@ export const RoleNavigationBar: React.FC = () => {
     language,
     setLanguage,
     userProfile,
+    currentUser,
+    setIsAuthModalOpen,
+    logout,
   } = useApp();
 
   const roles: { id: UserRole; label: string; icon: any }[] = [
@@ -132,16 +135,53 @@ export const RoleNavigationBar: React.FC = () => {
           <Settings className="w-4 h-4" />
         </button>
 
-        {/* User profile */}
-        <div className="hidden md:flex items-center gap-2 pl-2 border-l border-[#263342]">
-          <div className="w-6 h-6 rounded bg-[#1597D4]/20 text-[#1597D4] border border-[#1597D4]/40 flex items-center justify-center font-bold text-xs">
-            {userProfile.name.charAt(0)}
+        {/* User profile & Auth Controls */}
+        {currentUser ? (
+          <div className="flex items-center gap-2.5 pl-2.5 border-l border-[#263342]">
+            <div className="flex items-center gap-2">
+              <div className={`w-7 h-7 rounded-[5px] flex items-center justify-center font-bold text-xs border ${
+                currentUser.role === 'officer'
+                  ? 'bg-[#D49A32]/20 text-[#D49A32] border-[#D49A32]/40'
+                  : 'bg-[#1597D4]/20 text-[#1597D4] border-[#1597D4]/40'
+              }`}>
+                {currentUser.avatar}
+              </div>
+              <div className="hidden md:block text-left leading-tight">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-white text-[11px] truncate max-w-[120px]">
+                    {currentUser.name}
+                  </span>
+                  <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
+                    currentUser.role === 'officer'
+                      ? 'bg-[#D49A32]/15 text-[#D49A32] border border-[#D49A32]/30'
+                      : 'bg-[#1597D4]/15 text-[#1597D4] border border-[#1597D4]/30'
+                  }`}>
+                    {currentUser.role === 'officer' ? 'OFFICER L4' : 'CITIZEN'}
+                  </span>
+                </div>
+                <div className="text-[10px] text-[#637184] truncate max-w-[130px]">
+                  {currentUser.role === 'officer' ? currentUser.designation : currentUser.ward}
+                </div>
+              </div>
+            </div>
+
+            {/* Switch Account Button */}
+            <button
+              onClick={() => setIsAuthModalOpen(true)}
+              className="px-2 py-1 rounded bg-[#111A24] hover:bg-[#151F2A] text-[#93A1B2] hover:text-white border border-[#263342] hover:border-[#1597D4] text-[11px] font-mono transition-colors cursor-pointer flex items-center gap-1"
+              title="Switch Citizen / Officer Account"
+            >
+              <span>Switch</span>
+            </button>
           </div>
-          <div className="text-left leading-none">
-            <div className="font-medium text-white text-[11px]">{userProfile.name}</div>
-            <div className="text-[10px] text-[#637184] mt-0.5">{userProfile.ward.split('—')[0]}</div>
-          </div>
-        </div>
+        ) : (
+          <button
+            onClick={() => setIsAuthModalOpen(true)}
+            className="px-3 py-1.5 rounded-[5px] bg-[#1597D4] hover:bg-[#1282B8] text-white text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 shadow-md shadow-[#1597D4]/20"
+          >
+            <span>Login / Switch</span>
+          </button>
+        )}
       </div>
     </header>
   );

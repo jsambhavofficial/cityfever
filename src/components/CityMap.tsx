@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import type { HotspotCluster, IncidentReport, VisualizationSettings } from '../types/incident';
 import * as maplibregl from 'maplibre-gl';
-
+import { Search, X, MapPin, AlertCircle } from 'lucide-react';
 import { getCategoryTheme } from '../utils/categoryColors';
 
 interface CityMapProps {
@@ -29,6 +29,9 @@ export const CityMap: React.FC<CityMapProps> = ({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapMode, setMapMode] = useState<'map' | 'satellite' | 'heatmap'>('map');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const onSelectClusterRef = useRef(onSelectCluster);
   onSelectClusterRef.current = onSelectCluster;
 
@@ -343,70 +346,185 @@ export const CityMap: React.FC<CityMapProps> = ({
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
-    // Show top clusters with precise markers
-    const visibleHotspots = hotspots.slice(0, 6);
+    // Prioritize any emergency distress spots first so they always appear on the GIS map
+    const emergencyHotspots = hotspots.filter(
+      (h) =>
+        h.severity === 'CRITICAL' ||
+        h.name.includes('SOS') ||
+        h.title.toUpperCase().includes('EMERGENCY') ||
+        h.anomalyScore >= 0.95
+    );
+    const standardHotspots = hotspots.filter(
+      (h) =>
+        !(
+          h.severity === 'CRITICAL' ||
+          h.name.includes('SOS') ||
+          h.title.toUpperCase().includes('EMERGENCY') ||
+          h.anomalyScore >= 0.95
+        )
+    );
+
+    const orderedHotspots = [...emergencyHotspots, ...standardHotspots];
+
+    // Show top clusters with precise markers (filters dynamically on search)
+    const visibleHotspots = searchQuery.trim()
+      ? orderedHotspots.filter((h) => {
+          const q = searchQuery.toLowerCase();
+          return (
+            h.name.toLowerCase().includes(q) ||
+            h.district.toLowerCase().includes(q) ||
+            h.title.toLowerCase().includes(q) ||
+            h.id.toLowerCase().includes(q)
+          );
+        }).slice(0, 10)
+      : orderedHotspots.slice(0, 8);
 
     visibleHotspots.forEach((cluster, idx) => {
       const isSelected = selectedClusterId === cluster.id;
-      const isTop2 = idx < 2;
+      const isEmergency =
+        cluster.severity === 'CRITICAL' ||
+        cluster.name.includes('SOS') ||
+        cluster.title.toUpperCase().includes('EMERGENCY') ||
+        cluster.anomalyScore >= 0.95;
+      const isTop2 = idx < 2 && !isEmergency;
       const categoryTheme = getCategoryTheme(cluster.category);
 
       // Container
       const el = document.createElement('div');
       el.style.cssText = `
         display: flex; flex-direction: column; align-items: center;
-        cursor: pointer; position: relative; transition: transform 0.15s ease;
-        z-index: ${isSelected ? 50 : 30 - idx};
+        cursor: pointer; position: relative; transition: transform 0.2s ease;
+        z-index: ${isEmergency ? 999 : (isSelected ? 50 : 30 - idx)};
       `;
 
-      // ── Subtle Ring for top critical ──
-      if (isTop2) {
-        const ring = document.createElement('div');
-        ring.style.cssText = `
-          position: absolute; width: 32px; height: 32px; border-radius: 50%;
-          top: 50%; left: 50%; transform: translate(-50%, -50%);
-          border: 1px solid ${categoryTheme.hex}; opacity: 0.4; pointer-events: none;
+      if (isEmergency) {
+        // ── DISTINCT EMERGENCY SPOT ("Algspot") ──
+        // 1. Primary Expanding Shockwave Radar Ring
+        const ring1 = document.createElement('div');
+        ring1.className = 'emergency-radar-ring-1';
+        ring1.style.cssText = `
+          position: absolute; width: 62px; height: 62px; border-radius: 50%;
+          top: 14px; left: 50%; transform: translate(-50%, -50%);
+          border: 2.5px solid #EF4444; background: rgba(239, 68, 68, 0.25);
+          pointer-events: none;
         `;
-        el.appendChild(ring);
+        el.appendChild(ring1);
+
+        // 2. Secondary Expanding Wave Ring
+        const ring2 = document.createElement('div');
+        ring2.className = 'emergency-radar-ring-2';
+        ring2.style.cssText = `
+          position: absolute; width: 44px; height: 44px; border-radius: 50%;
+          top: 14px; left: 50%; transform: translate(-50%, -50%);
+          border: 1.5px dashed #FCA5A5;
+          pointer-events: none;
+        `;
+        el.appendChild(ring2);
+
+        // 3. Flashing Strobe Siren Beacon (Rotated Diamond)
+        const beacon = document.createElement('div');
+        beacon.className = 'emergency-beacon-strobe';
+        beacon.style.cssText = `
+          width: 26px; height: 26px; border-radius: 6px;
+          background: linear-gradient(135deg, #EF4444, #991B1B);
+          border: 2px solid #FEF08A;
+          display: flex; align-items: center; justify-content: center;
+          position: relative; z-index: 3;
+          transform: rotate(45deg);
+          box-shadow: 0 0 16px #EF4444, 0 0 30px rgba(239, 68, 68, 0.8);
+        `;
+        beacon.innerHTML = `
+          <span style="transform: rotate(-45deg); font-size: 14px; line-height: 1; user-select: none;">
+            🚨
+          </span>
+        `;
+        el.appendChild(beacon);
+
+        // 4. Vertical Laser Anchor
+        const laser = document.createElement('div');
+        laser.style.cssText = `
+          width: 2px; height: 10px;
+          background: linear-gradient(to bottom, #EF4444, rgba(239,68,68,0));
+          margin-top: 2px;
+        `;
+        el.appendChild(laser);
+
+        // 5. High-Impact Alarming Emergency Banner
+        const label = document.createElement('div');
+        label.style.cssText = `
+          margin-top: 2px; padding: 4px 8px;
+          border-radius: 4px;
+          background: linear-gradient(135deg, #450A0A 0%, #1A0505 100%);
+          border: 1.5px solid #EF4444;
+          box-shadow: 0 0 18px rgba(239, 68, 68, 0.7), 0 4px 12px rgba(0,0,0,0.9);
+          display: flex; flex-direction: column; align-items: center; gap: 2px;
+          white-space: nowrap; font-family: 'Inter', sans-serif;
+        `;
+
+        label.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #EF4444;" class="animate-ping"></span>
+            <span style="font-size: 10px; font-weight: 800; color: #FCA5A5; letter-spacing: 0.05em; text-transform: uppercase;">
+              🚨 EMERGENCY SOS
+            </span>
+            <span style="font-size: 8px; font-family: 'JetBrains Mono', monospace; font-weight: 700; background: #DC2626; color: #FFFFFF; padding: 1px 4px; border-radius: 2px;">
+              P-100
+            </span>
+          </div>
+          <div style="font-size: 9px; font-weight: 600; color: #FFFFFF; max-width: 140px; overflow: hidden; text-overflow: ellipsis;">
+            ${cluster.name.replace('🚨 SOS: ', '')}
+          </div>
+        `;
+        el.appendChild(label);
+      } else {
+        // ── STANDARD GIS CLUSTER SPOT ──
+        if (isTop2) {
+          const ring = document.createElement('div');
+          ring.style.cssText = `
+            position: absolute; width: 32px; height: 32px; border-radius: 50%;
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            border: 1px solid ${categoryTheme.hex}; opacity: 0.4; pointer-events: none;
+          `;
+          el.appendChild(ring);
+        }
+
+        // Precise Beacon Dot
+        const dot = document.createElement('div');
+        dot.style.cssText = `
+          width: 8px; height: 8px; border-radius: 50%;
+          background: ${isSelected ? '#1597D4' : categoryTheme.hex};
+          border: 1.5px solid #080D14;
+          box-shadow: 0 0 6px ${categoryTheme.hex};
+          position: relative;
+          z-index: 2;
+        `;
+        el.appendChild(dot);
+
+        // Compact GIS Label
+        const label = document.createElement('div');
+        label.style.cssText = `
+          margin-top: 3px; padding: 3px 6px;
+          border-radius: 3px; background: ${isSelected ? '#151F2A' : '#111A24'};
+          border: 1px solid ${isSelected ? '#1597D4' : '#263342'};
+          display: flex; align-items: center; gap: 5px; white-space: nowrap;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+          font-family: 'Inter', sans-serif; transition: all 0.15s;
+        `;
+
+        label.innerHTML = `
+          <span style="font-size:10px;font-weight:600;color:#E8EDF3;">
+            ${cluster.name}
+          </span>
+          <span style="font-size:9px;font-family:'JetBrains Mono',monospace;color:${categoryTheme.textLight};">
+            +${cluster.spikePercentage}%
+          </span>
+        `;
+        el.appendChild(label);
       }
-
-      // ── Precise Beacon Dot ──
-      const dot = document.createElement('div');
-      dot.style.cssText = `
-        width: 8px; height: 8px; border-radius: 50%;
-        background: ${isSelected ? '#1597D4' : categoryTheme.hex};
-        border: 1.5px solid #080D14;
-        box-shadow: 0 0 6px ${categoryTheme.hex};
-        position: relative;
-        z-index: 2;
-      `;
-      el.appendChild(dot);
-
-      // ── Compact GIS Label ──
-      const label = document.createElement('div');
-      label.style.cssText = `
-        margin-top: 3px; padding: 3px 6px;
-        border-radius: 3px; background: ${isSelected ? '#151F2A' : '#111A24'};
-        border: 1px solid ${isSelected ? '#1597D4' : '#263342'};
-        display: flex; align-items: center; gap: 5px; white-space: nowrap;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.5);
-        font-family: 'Inter', sans-serif; transition: all 0.15s;
-      `;
-
-      label.innerHTML = `
-        <span style="font-size:10px;font-weight:600;color:#E8EDF3;">
-          ${cluster.name}
-        </span>
-        <span style="font-size:9px;font-family:'JetBrains Mono',monospace;color:${categoryTheme.textLight};">
-          +${cluster.spikePercentage}%
-        </span>
-      `;
-
-      el.appendChild(label);
 
       // Events
       el.addEventListener('click', (e) => { e.stopPropagation(); onSelectClusterRef.current(cluster); });
-      el.addEventListener('mouseenter', () => { el.style.transform = 'scale(1.05)'; });
+      el.addEventListener('mouseenter', () => { el.style.transform = isEmergency ? 'scale(1.12)' : 'scale(1.05)'; });
       el.addEventListener('mouseleave', () => { el.style.transform = 'scale(1)'; });
 
       const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
@@ -414,7 +532,7 @@ export const CityMap: React.FC<CityMapProps> = ({
         .addTo(map);
       markersRef.current.push(marker);
     });
-  }, [hotspots, selectedClusterId, mapLoaded]);
+  }, [hotspots, selectedClusterId, mapLoaded, searchQuery]);
 
   // ─── Update pitch ────────────────────────────────────────────────
   useEffect(() => {
@@ -427,12 +545,17 @@ export const CityMap: React.FC<CityMapProps> = ({
     if (!mapRef.current || !selectedClusterId) return;
     const cluster = hotspots.find((h) => h.id === selectedClusterId);
     if (cluster) {
+      const isEmerg =
+        cluster.severity === 'CRITICAL' ||
+        cluster.name.includes('SOS') ||
+        cluster.title.toUpperCase().includes('EMERGENCY');
+
       mapRef.current.flyTo({
         center: [cluster.longitude, cluster.latitude],
-        zoom: 14.8,
-        pitch: 52,
-        bearing: -18,
-        duration: 1600,
+        zoom: isEmerg ? 16.2 : 14.8,
+        pitch: isEmerg ? 60 : 52,
+        bearing: isEmerg ? -22 : -18,
+        duration: 1800,
         essential: true,
       });
     }
@@ -456,10 +579,111 @@ export const CityMap: React.FC<CityMapProps> = ({
     }
   }, [Math.floor(currentHour / 3), mapLoaded]);
 
-  const [mapMode, setMapMode] = useState<'map' | 'satellite' | 'heatmap'>('map');
-  const [searchQuery, setSearchQuery] = useState('');
+  // Delhi localities for fast geographic navigation
+  const DELHI_LOCALITIES = [
+    { name: 'Connaught Place', ward: 'Ward 42 — New Delhi Central', lat: 28.6315, lng: 77.2195, type: 'Central Hub' },
+    { name: 'Rohini Sector 7 & 14', ward: 'Ward 14 — Rohini North', lat: 28.7041, lng: 77.1025, type: 'North West' },
+    { name: 'Lajpat Nagar Central Market', ward: 'Ward 28 — South East', lat: 28.5677, lng: 77.2433, type: 'South Market' },
+    { name: 'Janakpuri District Centre', ward: 'Ward 33 — West Delhi', lat: 28.6219, lng: 77.0878, type: 'West District' },
+    { name: 'Dwarka Sector 10 & 12', ward: 'Ward 38 — South West', lat: 28.5823, lng: 77.0594, type: 'Sub-City Zone' },
+    { name: 'Karol Bagh Market', ward: 'Ward 22 — Central West', lat: 28.6517, lng: 77.1906, type: 'Central West' },
+    { name: 'Chandni Chowk / Red Fort', ward: 'Ward 18 — North Central', lat: 28.6560, lng: 77.2300, type: 'Historic Core' },
+  ];
+
+  // Dynamic search results across Hotspots, Incidents & City Zones
+  const searchResults = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+
+    const items: Array<{
+      id: string;
+      title: string;
+      subtitle: string;
+      badge: string;
+      badgeColor: string;
+      lat: number;
+      lng: number;
+      clusterRef?: HotspotCluster;
+    }> = [];
+
+    // 1. Match Hotspots
+    hotspots.forEach((h) => {
+      if (
+        h.name.toLowerCase().includes(q) ||
+        h.district.toLowerCase().includes(q) ||
+        h.title.toLowerCase().includes(q) ||
+        h.id.toLowerCase().includes(q) ||
+        h.category.toLowerCase().includes(q)
+      ) {
+        items.push({
+          id: h.id,
+          title: h.name,
+          subtitle: `${h.district} • ${h.subtitle || h.title}`,
+          badge: h.category.toUpperCase(),
+          badgeColor: '#1597D4',
+          lat: h.latitude,
+          lng: h.longitude,
+          clusterRef: h,
+        });
+      }
+    });
+
+    // 2. Match Active Incidents / Complaints
+    incidents.forEach((inc) => {
+      if (
+        inc.id.toLowerCase().includes(q) ||
+        inc.title.toLowerCase().includes(q) ||
+        (inc.locationName && inc.locationName.toLowerCase().includes(q)) ||
+        (inc.description && inc.description.toLowerCase().includes(q))
+      ) {
+        items.push({
+          id: inc.id,
+          title: `${inc.id}: ${inc.title}`,
+          subtitle: `${inc.locationName || inc.district} • Status: ${inc.status}`,
+          badge: inc.severity,
+          badgeColor: inc.severity === 'CRITICAL' ? '#D65A5A' : inc.severity === 'HIGH' ? '#DE7A38' : '#D49A32',
+          lat: inc.latitude,
+          lng: inc.longitude,
+        });
+      }
+    });
+
+    // 3. Match Delhi Landmarks
+    DELHI_LOCALITIES.forEach((loc) => {
+      if (loc.name.toLowerCase().includes(q) || loc.ward.toLowerCase().includes(q)) {
+        items.push({
+          id: `LOC-${loc.name.replace(/\s+/g, '')}`,
+          title: loc.name,
+          subtitle: `${loc.ward} (${loc.type})`,
+          badge: 'ZONE',
+          badgeColor: '#27A878',
+          lat: loc.lat,
+          lng: loc.lng,
+        });
+      }
+    });
+
+    return items.slice(0, 6);
+  }, [searchQuery, hotspots, incidents]);
+
+  const handleSelectLocation = (res: { lat: number; lng: number; clusterRef?: HotspotCluster; title: string }) => {
+    mapRef.current?.flyTo({
+      center: [res.lng, res.lat],
+      zoom: 15.5,
+      pitch: 55,
+      bearing: -15,
+      duration: 1200,
+    });
+    if (res.clusterRef) {
+      onSelectCluster(res.clusterRef);
+    }
+    setSearchQuery(res.title);
+    setIsSearchOpen(false);
+  };
 
   const resetCamera = useCallback(() => {
+    setSearchQuery('');
+    setIsSearchOpen(false);
     mapRef.current?.flyTo({ center: [77.2195, 28.6315], zoom: 13.5, pitch: 55, bearing: -15, duration: 1000 });
   }, []);
 
@@ -506,16 +730,79 @@ export const CityMap: React.FC<CityMapProps> = ({
           </button>
         </div>
 
-        {/* Top-Center: Search Bar */}
-        <div className="relative w-80 max-w-sm pointer-events-auto shadow-lg">
-          <input
-            type="text"
-            placeholder="Search location, ward or incident ID..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#090E16]/90 border border-[#1E293B] rounded-lg pl-3.5 pr-9 py-1.5 text-xs text-white placeholder-[#637184] focus:outline-none focus:border-[#1597D4] backdrop-blur-xs"
-          />
-          <span className="absolute right-3 top-2 text-[#637184]">🔍</span>
+        {/* Top-Center: Interactive Search Bar */}
+        <div className="relative w-80 max-w-sm pointer-events-auto shadow-xl">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search location, ward, or incident ID..."
+              value={searchQuery}
+              onFocus={() => setIsSearchOpen(true)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setIsSearchOpen(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchResults.length > 0) {
+                  handleSelectLocation(searchResults[0]);
+                }
+              }}
+              className="w-full bg-[#090E16]/95 border border-[#1E293B] hover:border-[#1597D4] focus:border-[#1597D4] rounded-lg pl-8 pr-8 py-1.5 text-xs text-white placeholder-[#637184] focus:outline-none backdrop-blur-md transition-colors shadow-inner"
+            />
+            <Search className="w-3.5 h-3.5 text-[#637184] absolute left-2.5 top-2.5 pointer-events-none" />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setIsSearchOpen(false);
+                }}
+                className="absolute right-2.5 top-2 text-[#637184] hover:text-white cursor-pointer"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Search Dropdown Results */}
+          {isSearchOpen && searchResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1.5 bg-[#090E16]/98 border border-[#1E293B] rounded-lg shadow-2xl backdrop-blur-md overflow-hidden z-50 divide-y divide-[#1E293B] max-h-72 overflow-y-auto">
+              {searchResults.map((res) => (
+                <div
+                  key={res.id}
+                  onClick={() => handleSelectLocation(res)}
+                  className="p-2.5 hover:bg-[#111A24] cursor-pointer transition-colors flex items-start justify-between gap-2 text-left"
+                >
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-white truncate flex items-center gap-1.5">
+                      <MapPin className="w-3 h-3 text-[#1597D4] shrink-0" />
+                      <span>{res.title}</span>
+                    </div>
+                    <div className="text-[10px] text-[#93A1B2] truncate mt-0.5 pl-4">
+                      {res.subtitle}
+                    </div>
+                  </div>
+                  <span
+                    className="text-[9px] px-1.5 py-0.5 rounded font-mono font-bold shrink-0"
+                    style={{
+                      backgroundColor: `${res.badgeColor}20`,
+                      color: res.badgeColor,
+                      border: `1px solid ${res.badgeColor}40`,
+                    }}
+                  >
+                    {res.badge}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {isSearchOpen && searchQuery && searchResults.length === 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1.5 bg-[#090E16]/98 border border-[#1E293B] rounded-lg p-3 text-center text-xs text-[#637184] shadow-2xl backdrop-blur-md z-50">
+              No incidents or locations found for "{searchQuery}"
+            </div>
+          )}
         </div>
 
         {/* Top-Right: Layers button */}

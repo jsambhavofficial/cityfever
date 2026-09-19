@@ -16,7 +16,17 @@ import { IncidentDetailModal } from '../components/IncidentDetailModal';
 import { AIIntelligenceModal } from '../components/AIIntelligenceModal';
 import { ReportSubmissionModal } from '../components/ReportSubmissionModal';
 import { useApp } from '../context/AppContext';
-import { CheckCircle2 } from 'lucide-react';
+import {
+  CheckCircle2,
+  Satellite,
+  AlertTriangle,
+  Radio,
+  Crosshair,
+  Flame,
+  Activity,
+  ShieldAlert,
+} from 'lucide-react';
+import { sounds } from '../services/soundEffects';
 
 export const Dashboard: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<IncidentCategory>('all');
@@ -76,60 +86,89 @@ export const Dashboard: React.FC = () => {
   };
 
   // Dynamically map citizen complaints onto the live 3D GIS Map
-  const liveCitizenHotspots: HotspotCluster[] = complaints.map((c, idx) => ({
-    id: `citizen-hotspot-${c.id}`,
-    rank: idx + 1,
-    name: `${(c.location || 'Delhi Zone').split(',')[0]} (${c.id})`,
-    aliasTitle: c.title,
-    district: c.ward,
-    category: (c.category as IncidentCategory) || 'road',
-    title: c.title,
-    subtitle: (c.description || '').slice(0, 65) + '...',
-    latitude: c.latitude || 28.6315,
-    longitude: c.longitude || 77.2195,
-    currentDensity: 88,
-    baselineReports: 1,
-    actualReports: c.upvotes || 1,
-    spikePercentage: (c.priorityScore || 75) * 2,
-    severity: (c.severity as SeverityLevel) || 'HIGH',
-    radiusKm: 0.35,
-    buildingHeightMultiplier: 1.8,
-    anomalyScore: (c.priorityScore || 75) / 100,
-    whyDetected: c.priorityReasons && c.priorityReasons.length > 0 ? c.priorityReasons : ['Live Grievance Filed by Citizen • AI Prioritized'],
-    sampleReports: [
-      {
-        id: c.id,
-        time: c.reportedAt,
-        text: c.description || c.title,
-        severity: (c.severity as SeverityLevel) || 'HIGH',
-        user: 'Citizen Reporter'
-      }
-    ],
-    hourlyDistribution: Array(24).fill(1),
-    recommendedAction: `Inspect and dispatch field crew for ${c.issueType || c.title}`
-  }));
+  const liveCitizenHotspots: HotspotCluster[] = complaints.map((c, idx) => {
+    const isEmergency =
+      c.severity === 'CRITICAL' ||
+      c.title.toUpperCase().includes('EMERGENCY') ||
+      c.title.toUpperCase().includes('SOS') ||
+      (c.priorityScore !== undefined && c.priorityScore >= 90);
 
-  const allHotspotsCombined = [...liveCitizenHotspots, ...HOTSPOT_CLUSTERS];
+    return {
+      id: `citizen-hotspot-${c.id}`,
+      rank: isEmergency ? 0 : idx + 1,
+      name: isEmergency
+        ? `🚨 SOS: ${(c.location || 'Delhi Zone').split(',')[0]} (${c.id})`
+        : `${(c.location || 'Delhi Zone').split(',')[0]} (${c.id})`,
+      aliasTitle: c.title,
+      district: c.ward,
+      category: isEmergency ? 'safety' : ((c.category as IncidentCategory) || 'road'),
+      title: c.title,
+      subtitle: (c.description || '').slice(0, 65) + '...',
+      latitude: c.latitude || 28.6315,
+      longitude: c.longitude || 77.2195,
+      currentDensity: isEmergency ? 100 : 88,
+      baselineReports: 1,
+      actualReports: c.upvotes || 1,
+      spikePercentage: isEmergency ? 450 : (c.priorityScore || 75) * 2,
+      severity: isEmergency ? 'CRITICAL' : ((c.severity as SeverityLevel) || 'HIGH'),
+      radiusKm: isEmergency ? 0.65 : 0.35,
+      buildingHeightMultiplier: isEmergency ? 3.5 : 1.8,
+      anomalyScore: isEmergency ? 0.99 : (c.priorityScore || 75) / 100,
+      whyDetected:
+        c.priorityReasons && c.priorityReasons.length > 0
+          ? c.priorityReasons
+          : isEmergency
+          ? ['🚨 CRITICAL PUBLIC SAFETY DISTRESS BEACON ACTIVATED', 'Priority Level: 99/100 • Ground Dispatch Alerted']
+          : ['Live Grievance Filed by Citizen • AI Prioritized'],
+      sampleReports: [
+        {
+          id: c.id,
+          time: c.reportedAt,
+          text: c.description || c.title,
+          severity: isEmergency ? 'CRITICAL' : ((c.severity as SeverityLevel) || 'HIGH'),
+          user: isEmergency ? '🚨 Citizen Distress SOS' : 'Citizen Reporter',
+        },
+      ],
+      hourlyDistribution: Array(24).fill(1),
+      recommendedAction: isEmergency
+        ? `🚨 RED-ALERT RAPID DISPATCH: Cordon hazard perimeter for ${c.title}`
+        : `Inspect and dispatch field crew for ${c.issueType || c.title}`,
+    };
+  });
+
+  const allHotspotsCombined = [...liveCitizenHotspots, ...HOTSPOT_CLUSTERS].sort((a, b) => {
+    const aEmerg = a.severity === 'CRITICAL' || a.name.includes('SOS') || a.title.toUpperCase().includes('EMERGENCY');
+    const bEmerg = b.severity === 'CRITICAL' || b.name.includes('SOS') || b.title.toUpperCase().includes('EMERGENCY');
+    if (aEmerg && !bEmerg) return -1;
+    if (!aEmerg && bEmerg) return 1;
+    return 0;
+  });
   const filteredHotspots = allHotspotsCombined.filter((h) => selectedCategory === 'all' ? true : h.category === selectedCategory);
 
   const staticIncidents = filterIncidentsByState(selectedCategory, currentHour, selectedCluster?.id || null);
-  const liveCitizenIncidents = complaints.map((c) => ({
-    id: c.id,
-    clusterId: `citizen-hotspot-${c.id}`,
-    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    hour: currentHour,
-    category: (c.category as IncidentCategory) || 'road',
-    title: c.title,
-    description: c.description || c.title,
-    locationName: c.location,
-    district: c.ward,
-    latitude: c.latitude || 28.6315,
-    longitude: c.longitude || 77.2195,
-    severity: (c.severity as SeverityLevel) || 'HIGH',
-    status: (c.status === 'RESOLVED' ? 'RESOLVED' : 'ACTIVE') as any,
-    citizenReporter: 'Verified Citizen',
-    confidenceScore: c.confidence || 0.95,
-  }));
+  const liveCitizenIncidents = complaints.map((c) => {
+    const isEmerg =
+      c.severity === 'CRITICAL' ||
+      c.title.toUpperCase().includes('EMERGENCY') ||
+      c.title.toUpperCase().includes('SOS');
+    return {
+      id: c.id,
+      clusterId: `citizen-hotspot-${c.id}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      hour: currentHour,
+      category: isEmerg ? 'safety' : ((c.category as IncidentCategory) || 'road'),
+      title: c.title,
+      description: c.description || c.title,
+      locationName: c.location,
+      district: c.ward,
+      latitude: c.latitude || 28.6315,
+      longitude: c.longitude || 77.2195,
+      severity: isEmerg ? 'CRITICAL' : ((c.severity as SeverityLevel) || 'HIGH'),
+      status: (c.status === 'RESOLVED' ? 'RESOLVED' : 'ACTIVE') as any,
+      citizenReporter: isEmerg ? '🚨 Citizen Distress SOS' : 'Verified Citizen',
+      confidenceScore: c.confidence || 0.98,
+    };
+  });
 
   const activeIncidents = [
     ...liveCitizenIncidents.filter((inc) => selectedCategory === 'all' || inc.category === selectedCategory),
@@ -162,15 +201,18 @@ export const Dashboard: React.FC = () => {
 
         {/* Center: Map + Timeline */}
         <div className="flex-1 flex flex-col relative overflow-hidden">
-          <CityMap
-            hotspots={filteredHotspots}
-            incidents={activeIncidents}
-            selectedClusterId={selectedCluster?.id || 'hotspot-1'}
-            onSelectCluster={handleSelectCluster}
-            visSettings={visSettings}
-            onUpdateVisSettings={handleUpdateVisSettings}
-            currentHour={currentHour}
-          />
+          {/* Map Area */}
+          <div className="flex-1 relative overflow-hidden">
+            <CityMap
+              hotspots={filteredHotspots}
+              incidents={activeIncidents}
+              selectedClusterId={selectedCluster?.id || 'hotspot-1'}
+              onSelectCluster={handleSelectCluster}
+              visSettings={visSettings}
+              onUpdateVisSettings={handleUpdateVisSettings}
+              currentHour={currentHour}
+            />
+          </div>
 
           <Timeline
             currentHour={currentHour}

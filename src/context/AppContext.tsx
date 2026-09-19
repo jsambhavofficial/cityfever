@@ -518,6 +518,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addNotification,
         isNotificationsOpen,
         setIsNotificationsOpen,
+        // Authentication
+        currentUser,
+        loginAsCitizen,
+        loginAsOfficer,
+        loginCustom,
+        logout,
+        isAuthModalOpen,
+        setIsAuthModalOpen,
+        // Settings & Toast
         language,
         setLanguage,
         theme,
